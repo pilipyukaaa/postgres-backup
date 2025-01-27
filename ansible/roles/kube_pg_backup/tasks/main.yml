@@ -1,0 +1,67 @@
+- name: Kubernetes postgres backup | Set inventory for {{ kube_environment }}
+  ansible.builtin.include_vars:
+    file: "../../../inventory/{{ kube_environment }}/kubernetes/group_vars/pg_backup.yml"
+
+- name: Kubernetes postgres backup | Set env
+  ansible.builtin.set_fact:
+    kube_context: "{{ kube_environment }}"
+
+- name: Kubernetes postgres backup | Create jobs
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    definition:
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: "{{ item.db_name | replace('_', '-') }}-backup-job"
+        namespace: "{{ job_namespace }}"
+      spec:
+        timeZone: "{{ job_timezone }}"
+        schedule: "{{ item.schedule }}"
+        successfulJobsHistoryLimit: 4
+        failedJobsHistoryLimit: 3
+        concurrencyPolicy: "{{ job_concurrency_policy }}"
+        jobTemplate:
+          spec:
+            template:
+              metadata:
+                annotations: "{{ pod_annotations }}"
+              spec:
+                imagePullSecrets:
+                  - name: "{{ pod_pull_secrets }}"
+                containers:
+                  - name: "{{ item.db_name | replace('_', '-') }}-backup"
+                    image: "{{ pod_image }}"
+                    imagePullPolicy: "{{ pod_pull_policy }}"
+                    env:
+                      - name: INSTANCE
+                        value: "{{ postgres.instance }}"
+                      - name: DB_HOST
+                        value: "{{ postgres.host }}"
+                      - name: DB_PORT
+                        value: "{{ postgres.port }}"
+                      - name: DB_NAME
+                        value: "{{ item.db_name }}"
+                      - name: DB_PASSWORD
+                        value: "{{ postgres.password }}"
+                      - name: DB_USER
+                        value: "{{ postgres.username }}"
+                      - name: S3_ACCESS_KEY
+                        value: "{{ s3.access_key }}"
+                      - name: S3_SECRET_KEY
+                        value: "{{ s3.secret_key }}"
+                      - name: S3_BUCKET
+                        value: "{{ s3.bucket }}"
+                      - name: S3_ENDPOINT
+                        value: "{{ s3.endpoint }}"
+                      - name: ENC_KEY
+                        value: "{{ s3.enc_key }}"
+                      - name: VERBOSE
+                        value: "{{ postgres.verbose }}"
+                    resources: "{{ pod_resources }}"
+                restartPolicy: "{{ pod_restart_policy }}"
+                securityContext:
+                  runAsUser: 0
+                  runAsGroup: 0
+  with_items: "{{ backup_databases }}"
