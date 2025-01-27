@@ -1,0 +1,29 @@
+FROM --platform=amd64 python:3.12-slim
+LABEL authors="andrewpilipyuk"
+
+RUN apt-get update && apt-get -y install --no-install-recommends \
+    curl ca-certificates lsb-release \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN install -d /usr/share/postgresql-common/pgdg
+RUN curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+RUN sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+
+RUN apt-get update && apt-get -y install --no-install-recommends \
+    postgresql-client-16 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-executor.txt /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.txt
+
+ENV WORKSPACE /app/
+RUN mkdir -p $WORKSPACE
+WORKDIR $WORKSPACE
+
+COPY ./app/tools ./tools
+COPY ./app/backup/dump_database.py ./backup/dump_database.py
+COPY ./app/backup/logging_config.py ./backup/logging_config.py
+
+ENV PYTHONPATH=/
+ENV PYTHONUNBUFFERED=1
+ENTRYPOINT ["python3", "-u", "/app/backup/dump_database.py"]
