@@ -1,0 +1,14 @@
+- name: Kubernetes postgres backup cron-jobs create
+  hosts: localhost
+  gather_facts: false
+  become: false
+  pre_tasks:
+    - name: Re-export the vars_prompt for cross playbook visibility
+      ansible.builtin.set_fact:
+        kube_environment: '{{ kube_environment }}'
+  roles:
+    - kube_pg_backup
+  vars_prompt:
+    - name: kube_environment
+      prompt: "Enter k8s environment for  deploy?"
+      private: false
